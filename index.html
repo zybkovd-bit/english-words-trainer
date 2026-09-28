@@ -191,7 +191,7 @@
         <div class="reveal" id="reveal" aria-live="polite"></div>
         <div class="row">
           <button class="btn primary" id="check-btn">Проверить</button>
-          <button class="btn" id="skip-btn">Показать ответ</button>
+          <button class="btn" id="skip-btn" aria-pressed="false">Показать ответ</button>
         </div>
         <div class="opts">
           <label><input type="checkbox" id="opt-live"> Проверять по буквам</label>
@@ -335,7 +335,7 @@
   function showWord() {
     var w = queue[pos];
     failedCurrent = false; locked = false;
-    clearTimeout(revealTimer); answerShown = false; pinned = false;
+    clearTimeout(revealTimer); answerShown = false; setPinned(false);
     clearTimeout(retypeTimer); clearTimeout(fadeTimer); holding = false;
     els.answer.readOnly = false;
     els.answer.classList.remove("fading"); els.reveal.classList.remove("fading");
@@ -490,11 +490,24 @@
     if (i < typed.length) wrongLetter(i);
   });
   els.check.addEventListener("click", check);
+  function setPinned(on) {
+    pinned = on;
+    els.skip.textContent = on ? "Скрыть ответ" : "Показать ответ";
+    els.skip.setAttribute("aria-pressed", on);
+  }
   els.skip.addEventListener("click", function () {
     if (locked) return;
-    registerMiss();
-    pinned = true;
-    showAnswer(null, null, "Напиши его, чтобы идти дальше.");
+    if (pinned) {
+      setPinned(false);
+      clearTimeout(revealTimer);
+      answerShown = false;
+      els.reveal.classList.remove("fading");
+      setHint("Теперь напиши <strong>по памяти</strong>.", undefined, "");
+    } else {
+      registerMiss();
+      setPinned(true);
+      showAnswer(null, null, "Напиши его, чтобы идти дальше.");
+    }
     els.answer.focus();
   });
 
