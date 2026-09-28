@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Word Speller</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #eef1f6;
+    --surface: #ffffff;
+    --ink: #172033;
+    --muted: #5d6880;
+    --line: #d5dbe7;
+    --accent: #2f55d4;
+    --accent-ink: #ffffff;
+    --good: #16894c;
+    --good-soft: #dcf3e5;
+    --bad: #cc2f22;
+    --bad-soft: #fbe3e0;
+    --font-display: "Unbounded", "Onest", system-ui, sans-serif;
+    --font-body: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #10141d;
+      --surface: #19202c;
+      --ink: #e7ebf3;
+      --muted: #97a1b6;
+      --line: #2c3547;
+      --accent: #7d97f5;
+      --accent-ink: #0f1420;
+      --good: #4fd08a;
+      --good-soft: #173826;
+      --bad: #ff7b6e;
+      --bad-soft: #43201c;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #10141d;
+    --surface: #19202c;
+    --ink: #e7ebf3;
+    --muted: #97a1b6;
+    --line: #2c3547;
+    --accent: #7d97f5;
+    --accent-ink: #0f1420;
+    --good: #4fd08a;
+    --good-soft: #173826;
+    --bad: #ff7b6e;
+    --bad-soft: #43201c;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.5 var(--font-body);
+  }
+  .wrap {
+    max-width: 640px;
+    margin: 0 auto;
+    padding-inline: 16px;
+    padding-block: 20px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 18px; letter-spacing: -0.01em; margin: 0; }
+  .brand span { color: var(--accent); }
+  .tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
+  .tabs button {
+    border: 0; background: transparent; color: var(--muted);
+    font: 500 14px var(--font-body); padding: 6px 14px; border-radius: 7px; cursor: pointer;
+  }
+  .tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 24px 20px; }
+
+  /* Trainer */
+  .progress { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .bar { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s ease; }
+
+  .card { display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; padding-block: 12px 4px; }
+  .label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; }
+  .ru {
+    font-family: var(--font-display); font-weight: 500;
+    font-size: clamp(28px, 8vw, 44px); line-height: 1.15; margin: 0;
+    text-wrap: balance; overflow-wrap: anywhere;
+  }
+  .answer {
+    width: 100%; max-width: 420px;
+    font: 700 clamp(22px, 6vw, 28px) var(--font-mono);
+    text-align: center; letter-spacing: .04em;
+    padding: 14px 16px; border-radius: 12px;
+    border: 2px solid var(--line); background: var(--bg); color: var(--ink);
+    outline: none; transition: border-color .15s, background-color .15s;
+  }
+  .answer:focus { border-color: var(--accent); }
+  .answer.good { border-color: var(--good); background: var(--good-soft); color: var(--good); }
+  .answer.bad { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); }
+  .shake { animation: shake .35s; }
+  @keyframes shake { 20%,60% { transform: translateX(-7px); } 40%,80% { transform: translateX(7px); } }
+  @media (prefers-reduced-motion: reduce) { .shake { animation: none; } .bar i { transition: none; } }
+
+  .reveal { min-height: 64px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .letters { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+  .letters b {
+    font: 700 20px var(--font-mono); min-width: 1.5em; padding: 4px 3px; border-radius: 6px;
+    background: var(--bg); border: 1px solid var(--line);
+  }
+  .letters b.ok { color: var(--good); border-color: var(--good); }
+  .letters b.no { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
+  .hint { font-size: 14px; color: var(--muted); margin: 0; }
+  .hint strong { color: var(--bad); }
+  .hint.good strong { color: var(--good); }
+
+  .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .btn {
+    font: 600 15px var(--font-body); padding: 10px 18px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .btn:focus-visible, .tabs button:focus-visible, .answer:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  .opts { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; font-size: 14px; color: var(--muted); }
+  .opts label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+  /* Results */
+  .result { display: flex; flex-direction: column; gap: 16px; align-items: center; text-align: center; }
+  .score { font-family: var(--font-display); font-size: 48px; font-weight: 700; margin: 0; font-variant-numeric: tabular-nums; }
+  .score small { font-size: 20px; color: var(--muted); }
+  .misses { width: 100%; border-collapse: collapse; font-size: 15px; text-align: left; }
+  .misses td { padding: 8px 4px; border-top: 1px solid var(--line); }
+  .misses td:first-child { font-family: var(--font-mono); font-weight: 700; }
+  .misses td:last-child { color: var(--muted); text-align: right; }
+
+  /* Word list */
+  .list-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .list-head h2 { font-family: var(--font-display); font-size: 18px; font-weight: 500; margin: 0; }
+  textarea {
+    width: 100%; min-height: 320px; resize: vertical;
+    font: 500 15px/1.6 var(--font-mono); padding: 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  }
+  .help { font-size: 14px; color: var(--muted); margin: 8px 0 16px; }
+  .help code { font-family: var(--font-mono); background: var(--bg); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line); }
+  .status { font-size: 14px; min-height: 1.5em; margin: 10px 0 0; }
+  .status.err { color: var(--bad); }
+  .status.ok { color: var(--good); }
+  .file { position: relative; overflow: hidden; }
+  .file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 class="brand">Word<span>Speller</span></h1>
+    <nav class="tabs" role="tablist">
+      <button id="tab-train" role="tab" aria-selected="true">Тренировка</button>
+      <button id="tab-list" role="tab" aria-selected="false">Мои слова</button>
+    </nav>
+  </header>
+
+  <!-- Trainer -->
+  <section id="view-train" class="panel">
+    <div id="trainer">
+      <div class="progress">
+        <span id="counter">1 / 20</span>
+        <div class="bar"><i id="bar-fill"></i></div>
+        <span id="mistakes-count">ошибок: 0</span>
+      </div>
+      <div class="card">
+        <p class="label">Напиши по-английски</p>
+        <p class="ru" id="ru-word">яблоко</p>
+        <input id="answer" class="answer" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="latin" aria-label="Английское слово">
+        <div class="reveal" id="reveal" aria-live="polite"></div>
+        <div class="row">
+          <button class="btn primary" id="check-btn">Проверить</button>
+          <button class="btn" id="skip-btn">Показать ответ</button>
+        </div>
+        <div class="opts">
+          <label><input type="checkbox" id="opt-live"> Проверять по буквам</label>
+          <label><input type="checkbox" id="opt-shuffle" checked> Перемешивать</label>
+        </div>
+      </div>
+    </div>
+
+    <div id="results" class="result" hidden>
+      <p class="label">Круг пройден</p>
+      <p class="score" id="score">18<small> / 20 с первого раза</small></p>
+      <table class="misses" id="misses"></table>
+      <div class="row">
+        <button class="btn primary" id="retry-mistakes">Повторить ошибки</button>
+        <button class="btn" id="restart">Начать заново</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Word list -->
+  <section id="view-list" class="panel" hidden>
+    <div class="list-head">
+      <h2>Список слов</h2>
+      <span class="hint" id="word-count"></span>
+    </div>
+    <p class="help">
+      Одна пара на строку: английское слово, потом перевод. Разделитель — дефис, тире, двоеточие, точка с запятой или табуляция:
+      <code>apple - яблоко</code>. Можно вставить из Excel или загрузить файл .txt / .csv.
+    </p>
+    <textarea id="words-input" spellcheck="false" aria-label="Список слов"></textarea>
+    <div class="row" style="justify-content:flex-start; margin-top:14px">
+      <button class="btn primary" id="save-words">Сохранить и начать</button>
+      <span class="btn file">Загрузить файл<input type="file" id="file-input" accept=".txt,.csv,.tsv,text/plain"></span>
+      <button class="btn" id="sample-words">Пример на 20 слов</button>
+    </div>
+    <p class="status" id="list-status"></p>
+  </section>
+</div>
+
+<script>
+(function () {
+  var SAMPLE = [
+    "apple - яблоко", "house - дом", "water - вода", "friend - друг", "window - окно",
+    "street - улица", "morning - утро", "chair - стул", "bread - хлеб", "teacher - учитель",
+    "yellow - жёлтый", "kitchen - кухня", "mountain - гора", "summer - лето", "answer - ответ",
+    "beautiful - красивый", "weather - погода", "library - библиотека", "tomorrow - завтра", "question - вопрос"
+  ].join("\n");
+  var STORE_WORDS = "wordspeller.words";
+  var STORE_OPTS = "wordspeller.opts";
+
+  function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  function save(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
+
+  function parse(text) {
+    var pairs = [], bad = [];
+    text.split(/\r?\n/).forEach(function (line, i) {
+      var s = line.trim();
+      if (!s) return;
+      // Try the most specific separators first so "ice-cream - мороженое" splits correctly.
+      var seps = [/\t/, /\s[-–—]\s/, /[–—]/, /\s*[:;=]\s*/, /,/, /-/];
+      var m = null;
+      for (var k = 0; k < seps.length && !m; k++) {
+        var idx = s.search(seps[k]);
+        if (idx > 0) m = [s.slice(0, idx), s.slice(idx).replace(seps[k], "")];
+      }
+      if (!m) { bad.push(i + 1); return; }
+      var en = m[0].trim(), ru = m[1].trim();
+      // If the Russian word came first, swap.
+      if (/[а-яё]/i.test(en) && !/[а-яё]/i.test(ru)) { var t = en; en = ru; ru = t; }
+      if (!en || !ru) { bad.push(i + 1); return; }
+      pairs.push({ en: en, ru: ru });
+    });
+    return { pairs: pairs, bad: bad };
+  }
+
+  function norm(s) { return s.trim().toLowerCase().replace(/\s+/g, " ").replace(/[’`]/g, "'"); }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var els = {
+    tabTrain: $("tab-train"), tabList: $("tab-list"), viewTrain: $("view-train"), viewList: $("view-list"),
+    trainer: $("trainer"), results: $("results"), counter: $("counter"), bar: $("bar-fill"), mcount: $("mistakes-count"),
+    ru: $("ru-word"), answer: $("answer"), reveal: $("reveal"), check: $("check-btn"), skip: $("skip-btn"),
+    live: $("opt-live"), shuffle: $("opt-shuffle"), score: $("score"), misses: $("misses"),
+    retry: $("retry-mistakes"), restart: $("restart"), input: $("words-input"), saveBtn: $("save-words"),
+    file: $("file-input"), sample: $("sample-words"), status: $("list-status"), wcount: $("word-count")
+  };
+
+  var words = [];      // full list
+  var queue = [];      // current round
+  var pos = 0;
+  var missed = [];     // words failed in this round
+  var failedCurrent = false;
+  var locked = false;  // true during the short "correct!" pause
+
+  // ----- options -----
+  try {
+    var o = JSON.parse(load(STORE_OPTS) || "{}");
+    if (typeof o.live === "boolean") els.live.checked = o.live;
+    if (typeof o.shuffle === "boolean") els.shuffle.checked = o.shuffle;
+  } catch (e) {}
+  function saveOpts() { save(STORE_OPTS, JSON.stringify({ live: els.live.checked, shuffle: els.shuffle.checked })); }
+  els.live.addEventListener("change", function () { saveOpts(); els.answer.focus(); });
+  els.shuffle.addEventListener("change", saveOpts);
+
+  // ----- tabs -----
+  function show(tab) {
+    var train = tab === "train";
+    els.tabTrain.setAttribute("aria-selected", train);
+    els.tabList.setAttribute("aria-selected", !train);
+    els.viewTrain.hidden = !train;
+    els.viewList.hidden = train;
+    if (train && !els.trainer.hidden) els.answer.focus();
+  }
+  els.tabTrain.addEventListener("click", function () { show("train"); });
+  els.tabList.addEventListener("click", function () { show("list"); });
+
+  // ----- round -----
+  function shuffled(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  function startRound(list) {
+    queue = els.shuffle.checked ? shuffled(list) : list.slice();
+    pos = 0; missed = [];
+    els.results.hidden = true; els.trainer.hidden = false;
+    showWord();
+  }
+  function showWord() {
+    var w = queue[pos];
+    failedCurrent = false; locked = false;
+    els.ru.textContent = w.ru;
+    els.answer.value = "";
+    els.answer.className = "answer";
+    els.answer.disabled = false;
+    els.reveal.innerHTML = "";
+    els.counter.textContent = (pos + 1) + " / " + queue.length;
+    els.bar.style.width = (pos / queue.length * 100) + "%";
+    els.mcount.textContent = "ошибок: " + missed.length;
+    els.answer.focus();
+  }
+
+  function letterDiff(typed, target) {
+    var box = document.createElement("div");
+    box.className = "letters";
+    for (var i = 0; i < target.length; i++) {
+      var b = document.createElement("b");
+      var ch = target[i];
+      b.textContent = ch === " " ? " " : ch;
+      b.className = typed[i] && typed[i].toLowerCase() === ch.toLowerCase() ? "ok" : "no";
+      box.appendChild(b);
+    }
+    return box;
+  }
+
+  function markWrong(typed) {
+    var w = queue[pos];
+    if (!failedCurrent) { failedCurrent = true; missed.push(w); els.mcount.textContent = "ошибок: " + missed.length; }
+    els.answer.className = "answer bad";
+    void els.answer.offsetWidth;
+    els.answer.classList.add("shake");
+    els.reveal.innerHTML = "";
+    els.reveal.appendChild(letterDiff(typed, w.en));
+    var p = document.createElement("p");
+    p.className = "hint";
+    p.innerHTML = "Правильно: <strong></strong>. Напиши слово ещё раз.";
+    p.querySelector("strong").textContent = w.en;
+    els.reveal.appendChild(p);
+    var wrongValue = els.answer.value;
+    setTimeout(function () {
+      if (queue[pos] !== w || locked || els.answer.value !== wrongValue) return;
+      els.answer.value = "";
+      els.answer.classList.remove("shake");
+      els.answer.focus();
+    }, 700);
+  }
+
+  function markRight() {
+    locked = true;
+    els.answer.className = "answer good";
+    if (!failedCurrent) {
+      els.reveal.innerHTML = "";
+      var p = document.createElement("p");
+      p.className = "hint good";
+      p.innerHTML = "<strong>Верно!</strong>";
+      els.reveal.appendChild(p);
+    }
+    setTimeout(next, failedCurrent ? 900 : 650);
+  }
+
+  function next() {
+    pos++;
+    if (pos >= queue.length) finish(); else showWord();
+  }
+
+  function check() {
+    if (locked) return;
+    var typed = els.answer.value;
+    if (!typed.trim()) { els.answer.focus(); return; }
+    if (norm(typed) === norm(queue[pos].en)) markRight(); else markWrong(typed);
+  }
+
+  els.answer.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); check(); }
+  });
+  els.answer.addEventListener("input", function () {
+    if (locked) return;
+    var typed = norm(els.answer.value), target = norm(queue[pos].en);
+    if (els.answer.classList.contains("bad") && typed.length) els.answer.className = "answer";
+    if (!els.live.checked || !typed) return;
+    if (typed === target) markRight();
+    else if (target.indexOf(typed) !== 0) markWrong(els.answer.value);
+  });
+  els.check.addEventListener("click", check);
+  els.skip.addEventListener("click", function () {
+    if (locked) return;
+    markWrong(els.answer.value);
+  });
+
+  function finish() {
+    els.bar.style.width = "100%";
+    els.trainer.hidden = true; els.results.hidden = false;
+    var good = queue.length - missed.length;
+    els.score.innerHTML = good + "<small> / " + queue.length + " с первого раза</small>";
+    els.misses.innerHTML = "";
+    missed.forEach(function (w) {
+      var tr = els.misses.insertRow();
+      tr.insertCell().textContent = w.en;
+      tr.insertCell().textContent = w.ru;
+    });
+    els.retry.hidden = missed.length === 0;
+    (missed.length ? els.retry : els.restart).focus();
+  }
+  els.retry.addEventListener("click", function () { startRound(missed.slice()); });
+  els.restart.addEventListener("click", function () { startRound(words); });
+
+  // ----- word list -----
+  function updateCount() {
+    var r = parse(els.input.value);
+    els.wcount.textContent = "слов: " + r.pairs.length;
+  }
+  function applyText(text, announce) {
+    var r = parse(text);
+    if (!r.pairs.length) {
+      els.status.className = "status err";
+      els.status.textContent = "Не нашёл ни одной пары. Пиши по одной на строку, например: apple - яблоко";
+      return false;
+    }
+    words = r.pairs;
+    save(STORE_WORDS, text);
+    els.status.className = r.bad.length ? "status err" : "status ok";
+    els.status.textContent = r.bad.length
+      ? "Сохранено слов: " + r.pairs.length + ". Пропущены строки без перевода: " + r.bad.join(", ")
+      : (announce ? "Сохранено слов: " + r.pairs.length : "");
+    return true;
+  }
+  els.input.addEventListener("input", updateCount);
+  els.saveBtn.addEventListener("click", function () {
+    if (applyText(els.input.value, true)) { startRound(words); show("train"); }
+  });
+  els.sample.addEventListener("click", function () { els.input.value = SAMPLE; updateCount(); els.status.textContent = ""; });
+  els.file.addEventListener("change", function () {
+    var f = els.file.files[0];
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      els.input.value = String(reader.result).replace(/^﻿/, "");
+      updateCount();
+      applyText(els.input.value, true);
+      els.file.value = "";
+    };
+    reader.readAsText(f, "utf-8");
+  });
+
+  // ----- boot -----
+  var stored = load(STORE_WORDS);
+  els.input.value = stored && parse(stored).pairs.length ? stored : SAMPLE;
+  updateCount();
+  applyText(els.input.value, false);
+  startRound(words);
+})();
+</script>
+</body>
+</html>
