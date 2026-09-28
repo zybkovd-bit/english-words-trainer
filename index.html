@@ -120,6 +120,8 @@
   }
   .letters b.ok { color: var(--good); border-color: var(--good); }
   .letters b.no { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
+  .answer, .reveal { transition: opacity .4s ease; }
+  .fading { opacity: 0; }
   .timer { width: 140px; max-width: 100%; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
   .timer i { display: block; height: 100%; background: var(--accent); transform-origin: left; animation: drain linear forwards; }
   @keyframes drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
@@ -284,6 +286,9 @@
   var failedCurrent = false;
   var locked = false;  // true during the short "correct!" pause
   var revealTimer = null;
+  var retypeTimer = null;  // standard mode: clears the wrong word after it has been shown
+  var fadeTimer = null;
+  var holding = false;     // standard mode: the wrong word is on show, typing is paused
   var answerShown = false; // the correct word is on screen right now
   var pinned = false;      // "Показать ответ" was pressed: keep the word visible
   var letterPos = -1;      // letter-by-letter mode: position of the letter being retried
@@ -331,6 +336,9 @@
     var w = queue[pos];
     failedCurrent = false; locked = false;
     clearTimeout(revealTimer); answerShown = false; pinned = false;
+    clearTimeout(retypeTimer); clearTimeout(fadeTimer); holding = false;
+    els.answer.readOnly = false;
+    els.answer.classList.remove("fading"); els.reveal.classList.remove("fading");
     letterPos = -1; letterFails = 0;
     els.ru.textContent = w.ru;
     els.answer.value = "";
@@ -404,19 +412,31 @@
   }
 
   // Standard mode: whole word checked on Enter.
+  // Standard mode: the wrong word stays in the field (red) next to the correct one for 3 s,
+  // then both fade out and the word is typed again.
   function wrongWord(typed) {
     var w = queue[pos];
     registerMiss();
     flashBad(true);
+    holding = true;
+    els.answer.readOnly = true;
     if (pinned) showAnswer(typed, null, "Напиши слово ещё раз.");
     else showAnswer(typed, SHOW_AFTER_WRONG_WORD, "Запомни и напиши ещё раз.");
-    var wrongValue = els.answer.value;
-    setTimeout(function () {
-      if (queue[pos] !== w || locked || els.answer.value !== wrongValue) return;
+    clearTimeout(fadeTimer); clearTimeout(retypeTimer);
+    fadeTimer = setTimeout(function () {
+      if (queue[pos] !== w) return;
+      els.answer.classList.add("fading");
+      if (!pinned) els.reveal.classList.add("fading");
+    }, SHOW_AFTER_WRONG_WORD - 400);
+    retypeTimer = setTimeout(function () {
+      if (queue[pos] !== w) return;
+      holding = false;
+      els.answer.readOnly = false;
       els.answer.value = "";
       els.answer.className = "answer";
+      els.reveal.classList.remove("fading");
       els.answer.focus();
-    }, 700);
+    }, SHOW_AFTER_WRONG_WORD);
   }
 
   // Letter mode: a wrong letter is removed; 3 wrong tries of the same letter show the word for 2 s.
@@ -449,7 +469,7 @@
   }
 
   function check() {
-    if (locked) return;
+    if (locked || holding) return;
     var typed = els.answer.value;
     if (!typed.trim()) { els.answer.focus(); return; }
     if (norm(typed) === norm(queue[pos].en)) markRight(); else wrongWord(typed);
