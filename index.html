@@ -195,6 +195,7 @@
         </div>
         <div class="opts">
           <label><input type="checkbox" id="opt-live"> Проверять по буквам</label>
+          <label id="opt-repeat-row"><input type="checkbox" id="opt-repeat"> Повтор без ошибок</label>
           <label><input type="checkbox" id="opt-shuffle" checked> Перемешивать</label>
         </div>
       </div>
@@ -274,7 +275,7 @@
     tabTrain: $("tab-train"), tabList: $("tab-list"), viewTrain: $("view-train"), viewList: $("view-list"),
     trainer: $("trainer"), results: $("results"), counter: $("counter"), bar: $("bar-fill"), mcount: $("mistakes-count"),
     ru: $("ru-word"), answer: $("answer"), reveal: $("reveal"), check: $("check-btn"), skip: $("skip-btn"),
-    live: $("opt-live"), shuffle: $("opt-shuffle"), score: $("score"), misses: $("misses"),
+    live: $("opt-live"), repeat: $("opt-repeat"), repeatRow: $("opt-repeat-row"), shuffle: $("opt-shuffle"), score: $("score"), misses: $("misses"),
     retry: $("retry-mistakes"), restart: $("restart"), input: $("words-input"), saveBtn: $("save-words"),
     file: $("file-input"), sample: $("sample-words"), status: $("list-status"), wcount: $("word-count")
   };
@@ -292,6 +293,7 @@
   var answerShown = false; // the correct word is on screen right now
   var pinned = false;      // "Показать ответ" was pressed: keep the word visible
   var letterPos = -1;      // letter-by-letter mode: position of the letter being retried
+  var attemptErrors = false; // letter mode: a wrong letter was typed in the current attempt
   var letterFails = 0;     // ...and how many wrong tries it has had since the last reveal
 
   var SHOW_AFTER_WRONG_WORD = 3000; // standard mode: show the answer for 3 s
@@ -302,10 +304,17 @@
   try {
     var o = JSON.parse(load(STORE_OPTS) || "{}");
     if (typeof o.live === "boolean") els.live.checked = o.live;
+    if (typeof o.repeat === "boolean") els.repeat.checked = o.repeat;
     if (typeof o.shuffle === "boolean") els.shuffle.checked = o.shuffle;
   } catch (e) {}
-  function saveOpts() { save(STORE_OPTS, JSON.stringify({ live: els.live.checked, shuffle: els.shuffle.checked })); }
-  els.live.addEventListener("change", function () { saveOpts(); els.answer.focus(); });
+  function saveOpts() {
+    save(STORE_OPTS, JSON.stringify({ live: els.live.checked, repeat: els.repeat.checked, shuffle: els.shuffle.checked }));
+  }
+  // "Повтор без ошибок" only applies to letter-by-letter checking.
+  function syncRepeatRow() { els.repeatRow.hidden = !els.live.checked; }
+  syncRepeatRow();
+  els.live.addEventListener("change", function () { syncRepeatRow(); saveOpts(); els.answer.focus(); });
+  els.repeat.addEventListener("change", function () { saveOpts(); els.answer.focus(); });
   els.shuffle.addEventListener("change", saveOpts);
 
   // ----- tabs -----
@@ -339,7 +348,7 @@
     clearTimeout(retypeTimer); clearTimeout(fadeTimer); holding = false;
     els.answer.readOnly = false;
     els.answer.classList.remove("fading"); els.reveal.classList.remove("fading");
-    letterPos = -1; letterFails = 0;
+    letterPos = -1; letterFails = 0; attemptErrors = false;
     els.ru.textContent = w.ru;
     els.answer.value = "";
     els.answer.className = "answer";
@@ -442,6 +451,7 @@
   // Letter mode: a wrong letter is removed; 3 wrong tries of the same letter show the word for 2 s.
   function wrongLetter(i) {
     registerMiss();
+    attemptErrors = true;
     els.answer.value = els.answer.value.slice(0, i);
     flashBad(false);
     if (i !== letterPos) { letterPos = i; letterFails = 0; }
@@ -453,6 +463,27 @@
       setHint("Неверная буква. Попытка <strong></strong> из " + LETTER_FAILS_TO_SHOW + ", потом покажу слово.",
         String(letterFails));
     }
+  }
+
+  // "Повтор без ошибок": the word was finished, but with mistakes, so it has to be typed again
+  // from memory; only an attempt without a single wrong letter moves on.
+  function retryClean() {
+    var w = queue[pos];
+    locked = true;
+    clearTimeout(revealTimer);
+    answerShown = false;
+    setPinned(false);
+    els.answer.className = "answer good";
+    setHint("Слово верное, но были ошибки. <strong>Напиши его ещё раз без ошибок.</strong>", undefined, "");
+    setTimeout(function () {
+      if (queue[pos] !== w) return;
+      locked = false;
+      attemptErrors = false;
+      letterPos = -1; letterFails = 0;
+      els.answer.value = "";
+      els.answer.className = "answer";
+      els.answer.focus();
+    }, 900);
   }
 
   function markRight() {
@@ -483,7 +514,10 @@
     var value = els.answer.value;
     if (els.answer.classList.contains("bad") && value.length) els.answer.className = "answer";
     if (!els.live.checked || !value) return;
-    if (norm(value) === norm(queue[pos].en)) { markRight(); return; }
+    if (norm(value) === norm(queue[pos].en)) {
+      if (els.repeat.checked && attemptErrors) retryClean(); else markRight();
+      return;
+    }
     var typed = value.toLowerCase(), target = queue[pos].en.toLowerCase().replace(/[’`]/g, "'");
     var i = 0;
     while (i < typed.length && typed[i] === target[i]) i++;
