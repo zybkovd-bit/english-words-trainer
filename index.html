@@ -120,6 +120,9 @@
   }
   .letters b.ok { color: var(--good); border-color: var(--good); }
   .letters b.no { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
+  .timer { width: 140px; max-width: 100%; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .timer i { display: block; height: 100%; background: var(--accent); transform-origin: left; animation: drain linear forwards; }
+  @keyframes drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
   .hint { font-size: 14px; color: var(--muted); margin: 0; }
   .hint strong { color: var(--bad); }
   .hint.good strong { color: var(--good); }
@@ -280,6 +283,15 @@
   var missed = [];     // words failed in this round
   var failedCurrent = false;
   var locked = false;  // true during the short "correct!" pause
+  var revealTimer = null;
+  var answerShown = false; // the correct word is on screen right now
+  var pinned = false;      // "Показать ответ" was pressed: keep the word visible
+  var letterPos = -1;      // letter-by-letter mode: position of the letter being retried
+  var letterFails = 0;     // ...and how many wrong tries it has had since the last reveal
+
+  var SHOW_AFTER_WRONG_WORD = 3000; // standard mode: show the answer for 3 s
+  var SHOW_AFTER_LETTER_FAILS = 2000; // letter mode: show the answer for 2 s...
+  var LETTER_FAILS_TO_SHOW = 3;       // ...after 3 wrong tries of the same letter
 
   // ----- options -----
   try {
@@ -318,6 +330,8 @@
   function showWord() {
     var w = queue[pos];
     failedCurrent = false; locked = false;
+    clearTimeout(revealTimer); answerShown = false; pinned = false;
+    letterPos = -1; letterFails = 0;
     els.ru.textContent = w.ru;
     els.answer.value = "";
     els.answer.className = "answer";
@@ -329,6 +343,7 @@
     els.answer.focus();
   }
 
+  // typed === null draws the word in neutral colours; otherwise letters are marked right/wrong.
   function letterDiff(typed, target) {
     var box = document.createElement("div");
     box.className = "letters";
@@ -336,45 +351,96 @@
       var b = document.createElement("b");
       var ch = target[i];
       b.textContent = ch === " " ? " " : ch;
-      b.className = typed[i] && typed[i].toLowerCase() === ch.toLowerCase() ? "ok" : "no";
+      if (typed !== null) b.className = typed[i] && typed[i].toLowerCase() === ch.toLowerCase() ? "ok" : "no";
       box.appendChild(b);
     }
     return box;
   }
 
-  function markWrong(typed) {
+  function setHint(html, text, cls) {
+    els.reveal.innerHTML = "";
+    var p = document.createElement("p");
+    p.className = "hint" + (cls ? " " + cls : "");
+    p.innerHTML = html;
+    if (text !== undefined) p.querySelector("strong").textContent = text;
+    els.reveal.appendChild(p);
+  }
+
+  // Show the correct word. ms = how long; null = until the word is passed.
+  function showAnswer(typed, ms, note) {
     var w = queue[pos];
-    if (!failedCurrent) { failedCurrent = true; missed.push(w); els.mcount.textContent = "ошибок: " + missed.length; }
+    clearTimeout(revealTimer);
+    answerShown = true;
+    setHint("Правильно: <strong></strong>. " + note, w.en);
+    els.reveal.insertBefore(letterDiff(typed, w.en), els.reveal.firstChild);
+    if (ms) {
+      var t = document.createElement("div");
+      t.className = "timer";
+      t.innerHTML = '<i style="animation-duration:' + ms + 'ms"></i>';
+      els.reveal.appendChild(t);
+      revealTimer = setTimeout(function () {
+        if (queue[pos] !== w || locked || pinned) return;
+        answerShown = false;
+        setHint("Теперь напиши <strong>по памяти</strong>.", undefined, "");
+      }, ms);
+    }
+  }
+
+  function registerMiss() {
+    if (failedCurrent) return;
+    failedCurrent = true;
+    missed.push(queue[pos]);
+    els.mcount.textContent = "ошибок: " + missed.length;
+  }
+
+  function flashBad(keepRed) {
     els.answer.className = "answer bad";
     void els.answer.offsetWidth;
     els.answer.classList.add("shake");
-    els.reveal.innerHTML = "";
-    els.reveal.appendChild(letterDiff(typed, w.en));
-    var p = document.createElement("p");
-    p.className = "hint";
-    p.innerHTML = "Правильно: <strong></strong>. Напиши слово ещё раз.";
-    p.querySelector("strong").textContent = w.en;
-    els.reveal.appendChild(p);
+    if (!keepRed) {
+      var w = queue[pos];
+      setTimeout(function () { if (queue[pos] === w && !locked) els.answer.className = "answer"; }, 600);
+    }
+  }
+
+  // Standard mode: whole word checked on Enter.
+  function wrongWord(typed) {
+    var w = queue[pos];
+    registerMiss();
+    flashBad(true);
+    if (pinned) showAnswer(typed, null, "Напиши слово ещё раз.");
+    else showAnswer(typed, SHOW_AFTER_WRONG_WORD, "Запомни и напиши ещё раз.");
     var wrongValue = els.answer.value;
     setTimeout(function () {
       if (queue[pos] !== w || locked || els.answer.value !== wrongValue) return;
       els.answer.value = "";
-      els.answer.classList.remove("shake");
+      els.answer.className = "answer";
       els.answer.focus();
     }, 700);
   }
 
+  // Letter mode: a wrong letter is removed; 3 wrong tries of the same letter show the word for 2 s.
+  function wrongLetter(i) {
+    registerMiss();
+    els.answer.value = els.answer.value.slice(0, i);
+    flashBad(false);
+    if (i !== letterPos) { letterPos = i; letterFails = 0; }
+    letterFails++;
+    if (letterFails >= LETTER_FAILS_TO_SHOW) {
+      letterFails = 0;
+      if (!pinned) showAnswer(null, SHOW_AFTER_LETTER_FAILS, "Продолжай писать.");
+    } else if (!answerShown) {
+      setHint("Неверная буква. Попытка <strong></strong> из " + LETTER_FAILS_TO_SHOW + ", потом покажу слово.",
+        String(letterFails));
+    }
+  }
+
   function markRight() {
     locked = true;
+    clearTimeout(revealTimer);
     els.answer.className = "answer good";
-    if (!failedCurrent) {
-      els.reveal.innerHTML = "";
-      var p = document.createElement("p");
-      p.className = "hint good";
-      p.innerHTML = "<strong>Верно!</strong>";
-      els.reveal.appendChild(p);
-    }
-    setTimeout(next, failedCurrent ? 900 : 650);
+    setHint("<strong>Верно!</strong>", undefined, "good");
+    setTimeout(next, 650);
   }
 
   function next() {
@@ -386,7 +452,7 @@
     if (locked) return;
     var typed = els.answer.value;
     if (!typed.trim()) { els.answer.focus(); return; }
-    if (norm(typed) === norm(queue[pos].en)) markRight(); else markWrong(typed);
+    if (norm(typed) === norm(queue[pos].en)) markRight(); else wrongWord(typed);
   }
 
   els.answer.addEventListener("keydown", function (e) {
@@ -394,16 +460,22 @@
   });
   els.answer.addEventListener("input", function () {
     if (locked) return;
-    var typed = norm(els.answer.value), target = norm(queue[pos].en);
-    if (els.answer.classList.contains("bad") && typed.length) els.answer.className = "answer";
-    if (!els.live.checked || !typed) return;
-    if (typed === target) markRight();
-    else if (target.indexOf(typed) !== 0) markWrong(els.answer.value);
+    var value = els.answer.value;
+    if (els.answer.classList.contains("bad") && value.length) els.answer.className = "answer";
+    if (!els.live.checked || !value) return;
+    if (norm(value) === norm(queue[pos].en)) { markRight(); return; }
+    var typed = value.toLowerCase(), target = queue[pos].en.toLowerCase().replace(/[’`]/g, "'");
+    var i = 0;
+    while (i < typed.length && typed[i] === target[i]) i++;
+    if (i < typed.length) wrongLetter(i);
   });
   els.check.addEventListener("click", check);
   els.skip.addEventListener("click", function () {
     if (locked) return;
-    markWrong(els.answer.value);
+    registerMiss();
+    pinned = true;
+    showAnswer(null, null, "Напиши его, чтобы идти дальше.");
+    els.answer.focus();
   });
 
   function finish() {
