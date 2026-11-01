@@ -21,6 +21,7 @@
     --good-soft: #dcf3e5;
     --bad: #cc2f22;
     --bad-soft: #fbe3e0;
+    --mid: #c4720a;
     --font-display: "Unbounded", "Onest", system-ui, sans-serif;
     --font-body: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -39,6 +40,7 @@
       --good-soft: #173826;
       --bad: #ff7b6e;
       --bad-soft: #43201c;
+      --mid: #f0a53a;
     }
   }
   :root[data-theme="dark"] {
@@ -54,6 +56,7 @@
     --good-soft: #173826;
     --bad: #ff7b6e;
     --bad-soft: #43201c;
+    --mid: #f0a53a;
   }
 
   * { box-sizing: border-box; }
@@ -65,7 +68,7 @@
     font: 16px/1.5 var(--font-body);
   }
   .wrap {
-    max-width: 640px;
+    max-width: 880px;
     margin: 0 auto;
     padding-inline: 16px;
     padding-block: 20px 48px;
@@ -128,6 +131,39 @@
   .hint { font-size: 14px; color: var(--muted); margin: 0; }
   .hint strong { color: var(--bad); }
   .hint.good strong { color: var(--good); }
+  .hint.know strong { color: var(--good); }
+  .hint.mid strong { color: var(--mid); }
+  .hint.dont strong { color: var(--bad); }
+
+  /* Pack: size picker, numbered circles, legend */
+  .train-grid { display: grid; gap: 20px; }
+  @media (min-width: 760px) { .train-grid { grid-template-columns: 236px minmax(0, 1fr); align-items: start; } }
+  .side { display: flex; flex-direction: column; gap: 16px; }
+  .side .label { margin-bottom: 8px; }
+  .sizes { display: flex; flex-wrap: wrap; gap: 4px; }
+  .sizes button {
+    font: 600 14px var(--font-body); min-width: 38px; padding: 6px 8px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-variant-numeric: tabular-nums;
+  }
+  .sizes button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .sizes button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
+    font: 700 13px var(--font-mono); font-variant-numeric: tabular-nums;
+    background: var(--bg); border: 2px solid var(--line); color: var(--muted);
+  }
+  .chip.know { background: var(--good); border-color: var(--good); color: var(--surface); }
+  .chip.mid { background: var(--mid); border-color: var(--mid); color: var(--surface); }
+  .chip.dont { background: var(--bad); border-color: var(--bad); color: var(--surface); }
+  .chip.current { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+  .legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); }
+  @media (min-width: 760px) { .legend { flex-direction: column; } }
+  .legend li { display: flex; align-items: center; gap: 7px; }
+  .legend b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--line); }
+  .dot.know { background: var(--good); } .dot.mid { background: var(--mid); } .dot.dont { background: var(--bad); }
+  .main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 
   .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
   .btn {
@@ -147,7 +183,9 @@
   .misses { width: 100%; border-collapse: collapse; font-size: 15px; text-align: left; }
   .misses td { padding: 8px 4px; border-top: 1px solid var(--line); }
   .misses td:first-child { font-family: var(--font-mono); font-weight: 700; }
-  .misses td:last-child { color: var(--muted); text-align: right; }
+  .misses td:last-child { text-align: right; white-space: nowrap; }
+  .misses td.ru { color: var(--muted); }
+  .misses td.know { color: var(--good); } .misses td.mid { color: var(--mid); } .misses td.dont { color: var(--bad); }
 
   /* Word list */
   .list-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -178,36 +216,58 @@
 
   <!-- Trainer -->
   <section id="view-train" class="panel">
-    <div id="trainer">
-      <div class="progress">
-        <span id="counter">1 / 20</span>
-        <div class="bar"><i id="bar-fill"></i></div>
-        <span id="mistakes-count">ошибок: 0</span>
-      </div>
-      <div class="card">
-        <p class="label">Напиши по-английски</p>
-        <p class="ru" id="ru-word">яблоко</p>
-        <input id="answer" class="answer" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="latin" aria-label="Английское слово">
-        <div class="reveal" id="reveal" aria-live="polite"></div>
-        <div class="row">
-          <button class="btn primary" id="check-btn">Проверить</button>
-          <button class="btn" id="skip-btn" aria-pressed="false">Показать ответ</button>
+    <div id="trainer" class="train-grid">
+      <aside class="side">
+        <div>
+          <p class="label">Слов за раз</p>
+          <div class="sizes" id="sizes" role="group" aria-label="Слов за раз">
+            <button data-size="5">5</button>
+            <button data-size="10">10</button>
+            <button data-size="15">15</button>
+            <button data-size="20">20</button>
+            <button data-size="0">Все</button>
+          </div>
         </div>
-        <div class="opts">
-          <label><input type="checkbox" id="opt-live"> Проверять по буквам</label>
-          <label id="opt-repeat-row"><input type="checkbox" id="opt-repeat"> Повтор без ошибок</label>
-          <label><input type="checkbox" id="opt-shuffle" checked> Перемешивать</label>
+        <div>
+          <p class="label" id="pack-label">Пакет · круг 1</p>
+          <div class="chips" id="chips"></div>
         </div>
-      </div>
-    </div>
+        <ul class="legend" id="legend"></ul>
+      </aside>
 
-    <div id="results" class="result" hidden>
-      <p class="label">Круг пройден</p>
-      <p class="score" id="score">18<small> / 20 с первого раза</small></p>
-      <table class="misses" id="misses"></table>
-      <div class="row">
-        <button class="btn primary" id="retry-mistakes">Повторить ошибки</button>
-        <button class="btn" id="restart">Начать заново</button>
+      <div class="main">
+        <div id="play">
+          <div class="progress">
+            <span id="counter">Слово 1 из 10</span>
+            <div class="bar"><i id="bar-fill"></i></div>
+            <span id="known-count">выучено 0 / 20</span>
+          </div>
+          <div class="card">
+            <p class="label">Напиши по-английски</p>
+            <p class="ru" id="ru-word">яблоко</p>
+            <input id="answer" class="answer" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="latin" aria-label="Английское слово">
+            <div class="reveal" id="reveal" aria-live="polite"></div>
+            <div class="row">
+              <button class="btn primary" id="check-btn">Проверить</button>
+              <button class="btn" id="skip-btn" aria-pressed="false">Показать ответ</button>
+            </div>
+            <div class="opts">
+              <label><input type="checkbox" id="opt-live"> Проверять по буквам</label>
+              <label id="opt-repeat-row"><input type="checkbox" id="opt-repeat"> Повтор без ошибок</label>
+              <label><input type="checkbox" id="opt-shuffle" checked> Перемешивать</label>
+            </div>
+          </div>
+        </div>
+
+        <div id="results" class="result" hidden>
+          <p class="label" id="res-label">Круг 1 пройден</p>
+          <p class="score" id="res-score">6<small> / 10 знаю</small></p>
+          <p class="hint" id="res-note"></p>
+          <div class="row">
+            <button class="btn primary" id="res-primary">Повторить 4 слова</button>
+          </div>
+          <table class="misses" id="res-table"></table>
+        </div>
       </div>
     </div>
   </section>
@@ -229,6 +289,10 @@
       <button class="btn" id="sample-words">Пример на 20 слов</button>
     </div>
     <p class="status" id="list-status"></p>
+    <div class="row" style="justify-content:flex-start; align-items:center; margin-top:8px">
+      <span class="hint" id="learned-count"></span>
+      <button class="btn" id="reset-progress">Сбросить прогресс</button>
+    </div>
   </section>
 </div>
 
@@ -242,6 +306,13 @@
   ].join("\n");
   var STORE_WORDS = "wordspeller.words";
   var STORE_OPTS = "wordspeller.opts";
+  var STORE_KNOWN = "wordspeller.known";
+  var SIZES = [5, 10, 15, 20, 0]; // 0 = all words
+  var STATUS = {
+    know: { ru: "Знаю", en: "I know" },
+    mid:  { ru: "Средне", en: "So-so" },
+    dont: { ru: "Не знаю", en: "Don't know" }
+  };
 
   function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
   function save(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
@@ -273,18 +344,24 @@
   var $ = function (id) { return document.getElementById(id); };
   var els = {
     tabTrain: $("tab-train"), tabList: $("tab-list"), viewTrain: $("view-train"), viewList: $("view-list"),
-    trainer: $("trainer"), results: $("results"), counter: $("counter"), bar: $("bar-fill"), mcount: $("mistakes-count"),
+    trainer: $("trainer"), play: $("play"), results: $("results"), counter: $("counter"), bar: $("bar-fill"), kcount: $("known-count"),
+    sizes: $("sizes"), chips: $("chips"), legend: $("legend"), packLabel: $("pack-label"),
+    resLabel: $("res-label"), resScore: $("res-score"), resNote: $("res-note"), resPrimary: $("res-primary"), resTable: $("res-table"),
+    learned: $("learned-count"), reset: $("reset-progress"),
     ru: $("ru-word"), answer: $("answer"), reveal: $("reveal"), check: $("check-btn"), skip: $("skip-btn"),
-    live: $("opt-live"), repeat: $("opt-repeat"), repeatRow: $("opt-repeat-row"), shuffle: $("opt-shuffle"), score: $("score"), misses: $("misses"),
-    retry: $("retry-mistakes"), restart: $("restart"), input: $("words-input"), saveBtn: $("save-words"),
+    live: $("opt-live"), repeat: $("opt-repeat"), repeatRow: $("opt-repeat-row"), shuffle: $("opt-shuffle"), input: $("words-input"), saveBtn: $("save-words"),
     file: $("file-input"), sample: $("sample-words"), status: $("list-status"), wcount: $("word-count")
   };
 
   var words = [];      // full list
-  var queue = [];      // current round
+  var known = {};      // keys of words marked "Знаю"; they are not asked again
+  var pack = [];       // words of the current pack, each with .num and .st (know / mid / dont)
+  var round = 0;       // 1 = first pass through the pack, 2+ = repeats of mid / dont words
+  var queue = [];      // words of the current round
   var pos = 0;
-  var missed = [];     // words failed in this round
-  var failedCurrent = false;
+  var result = null;   // status earned by the current word: null until the first mistake
+  var packSize = 10;
+  var resAction = null;
   var locked = false;  // true during the short "correct!" pause
   var revealTimer = null;
   var retypeTimer = null;  // standard mode: clears the wrong word after it has been shown
@@ -306,9 +383,13 @@
     if (typeof o.live === "boolean") els.live.checked = o.live;
     if (typeof o.repeat === "boolean") els.repeat.checked = o.repeat;
     if (typeof o.shuffle === "boolean") els.shuffle.checked = o.shuffle;
+    if (SIZES.indexOf(o.size) >= 0) packSize = o.size;
   } catch (e) {}
+  try { (JSON.parse(load(STORE_KNOWN) || "[]") || []).forEach(function (k) { known[k] = true; }); } catch (e) {}
+  function saveKnown() { save(STORE_KNOWN, JSON.stringify(Object.keys(known))); }
+  function key(w) { return norm(w.en) + "|" + w.ru.trim().toLowerCase(); }
   function saveOpts() {
-    save(STORE_OPTS, JSON.stringify({ live: els.live.checked, repeat: els.repeat.checked, shuffle: els.shuffle.checked }));
+    save(STORE_OPTS, JSON.stringify({ live: els.live.checked, repeat: els.repeat.checked, shuffle: els.shuffle.checked, size: packSize }));
   }
   // "Повтор без ошибок" only applies to letter-by-letter checking.
   function syncRepeatRow() { els.repeatRow.hidden = !els.live.checked; }
@@ -335,15 +416,74 @@
     for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
     return a;
   }
+  // ----- packs -----
+  function unknownWords() { return words.filter(function (w) { return !known[key(w)]; }); }
+
+  function syncSizes() {
+    Array.prototype.forEach.call(els.sizes.querySelectorAll("button"), function (b) {
+      b.setAttribute("aria-pressed", Number(b.dataset.size) === packSize);
+    });
+  }
+  els.sizes.addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    packSize = Number(b.dataset.size);
+    syncSizes(); saveOpts();
+    startPack();
+  });
+
+  function startPack() {
+    var pool = unknownWords();
+    if (!pool.length) { pack = []; round = 0; renderSide(); showAllLearned(); return; }
+    if (els.shuffle.checked) pool = shuffled(pool);
+    pack = (packSize ? pool.slice(0, packSize) : pool).map(function (w, i) {
+      return { en: w.en, ru: w.ru, num: i + 1, st: null };
+    });
+    round = 0;
+    startRound(pack);
+  }
+
   function startRound(list) {
+    round++;
     queue = els.shuffle.checked ? shuffled(list) : list.slice();
-    pos = 0; missed = [];
-    els.results.hidden = true; els.trainer.hidden = false;
+    pos = 0;
+    els.results.hidden = true; els.play.hidden = false;
     showWord();
   }
+
+  function renderSide() {
+    els.chips.innerHTML = "";
+    var counts = { know: 0, mid: 0, dont: 0, none: 0 };
+    pack.forEach(function (w) {
+      var c = document.createElement("span");
+      c.className = "chip" + (w.st ? " " + w.st : "") + (!els.play.hidden && queue[pos] === w ? " current" : "");
+      c.textContent = w.num;
+      if (w.st) c.title = w.en + " — " + w.ru + " · " + STATUS[w.st].ru;
+      els.chips.appendChild(c);
+      counts[w.st || "none"]++;
+    });
+    els.packLabel.textContent = pack.length ? "Пакет · круг " + round : "Пакет";
+    els.legend.innerHTML = "";
+    ["know", "mid", "dont"].forEach(function (st) {
+      var li = document.createElement("li");
+      li.innerHTML = '<span class="dot ' + st + '"></span>' + STATUS[st].ru + " · " + STATUS[st].en + " <b></b>";
+      li.querySelector("b").textContent = counts[st];
+      els.legend.appendChild(li);
+    });
+    if (counts.none) {
+      var li = document.createElement("li");
+      li.innerHTML = '<span class="dot"></span>Ещё не было <b></b>';
+      li.querySelector("b").textContent = counts.none;
+      els.legend.appendChild(li);
+    }
+    var learned = words.filter(function (w) { return known[key(w)]; }).length;
+    els.kcount.textContent = "выучено " + learned + " / " + words.length;
+    els.learned.textContent = "Выучено " + learned + " из " + words.length + " слов.";
+  }
+
   function showWord() {
     var w = queue[pos];
-    failedCurrent = false; locked = false;
+    result = null; locked = false;
     clearTimeout(revealTimer); answerShown = false; setPinned(false);
     clearTimeout(retypeTimer); clearTimeout(fadeTimer); holding = false;
     els.answer.readOnly = false;
@@ -354,9 +494,9 @@
     els.answer.className = "answer";
     els.answer.disabled = false;
     els.reveal.innerHTML = "";
-    els.counter.textContent = (pos + 1) + " / " + queue.length;
+    els.counter.textContent = "Слово " + (pos + 1) + " из " + queue.length;
     els.bar.style.width = (pos / queue.length * 100) + "%";
-    els.mcount.textContent = "ошибок: " + missed.length;
+    renderSide();
     els.answer.focus();
   }
 
@@ -403,11 +543,17 @@
     }
   }
 
-  function registerMiss() {
-    if (failedCurrent) return;
-    failedCurrent = true;
-    missed.push(queue[pos]);
-    els.mcount.textContent = "ошибок: " + missed.length;
+  // The first mistake on a word decides its status: wrong from the very first letter = "Не знаю",
+  // a mistake further on = "Средне". No mistakes at all = "Знаю".
+  function registerError(i) {
+    if (result) return;
+    result = i === 0 ? "dont" : "mid";
+  }
+  function firstMismatch(typed) {
+    var a = typed.toLowerCase(), b = queue[pos].en.toLowerCase().replace(/[’`]/g, "'");
+    var i = 0;
+    while (i < a.length && a[i] === b[i]) i++;
+    return i;
   }
 
   function flashBad(keepRed) {
@@ -425,7 +571,7 @@
   // then both fade out and the word is typed again.
   function wrongWord(typed) {
     var w = queue[pos];
-    registerMiss();
+    registerError(firstMismatch(typed.trim()));
     flashBad(true);
     holding = true;
     els.answer.readOnly = true;
@@ -450,7 +596,7 @@
 
   // Letter mode: a wrong letter is removed; 3 wrong tries of the same letter show the word for 2 s.
   function wrongLetter(i) {
-    registerMiss();
+    registerError(i);
     attemptErrors = true;
     els.answer.value = els.answer.value.slice(0, i);
     flashBad(false);
@@ -487,16 +633,20 @@
   }
 
   function markRight() {
+    var w = queue[pos];
     locked = true;
     clearTimeout(revealTimer);
+    w.st = result || "know";
+    if (w.st === "know") { known[key(w)] = true; saveKnown(); }
     els.answer.className = "answer good";
-    setHint("<strong>Верно!</strong>", undefined, "good");
-    setTimeout(next, 650);
+    setHint("<strong>" + STATUS[w.st].ru + "</strong> · " + STATUS[w.st].en, undefined, w.st);
+    renderSide();
+    setTimeout(next, 900);
   }
 
   function next() {
     pos++;
-    if (pos >= queue.length) finish(); else showWord();
+    if (pos >= queue.length) finishRound(); else showWord();
   }
 
   function check() {
@@ -538,29 +688,81 @@
       els.reveal.classList.remove("fading");
       setHint("Теперь напиши <strong>по памяти</strong>.", undefined, "");
     } else {
-      registerMiss();
+      registerError(firstMismatch(els.answer.value));
       setPinned(true);
       showAnswer(null, null, "Напиши его, чтобы идти дальше.");
     }
     els.answer.focus();
   });
 
-  function finish() {
+  function showResults(label, score, note, button, action) {
     els.bar.style.width = "100%";
-    els.trainer.hidden = true; els.results.hidden = false;
-    var good = queue.length - missed.length;
-    els.score.innerHTML = good + "<small> / " + queue.length + " с первого раза</small>";
-    els.misses.innerHTML = "";
-    missed.forEach(function (w) {
-      var tr = els.misses.insertRow();
+    els.play.hidden = true; els.results.hidden = false;
+    renderSide();
+    els.resLabel.textContent = label;
+    els.resScore.innerHTML = score;
+    els.resNote.textContent = note;
+    els.resPrimary.textContent = button;
+    resAction = action;
+    els.resTable.innerHTML = "";
+    pack.forEach(function (w) {
+      var tr = els.resTable.insertRow();
+      var c = tr.insertCell(); c.innerHTML = '<span class="dot ' + (w.st || "") + '"></span>';
       tr.insertCell().textContent = w.en;
-      tr.insertCell().textContent = w.ru;
+      c = tr.insertCell(); c.className = "ru"; c.textContent = w.ru;
+      c = tr.insertCell(); c.className = w.st || ""; c.textContent = w.st ? STATUS[w.st].ru : "";
     });
-    els.retry.hidden = missed.length === 0;
-    (missed.length ? els.retry : els.restart).focus();
+    els.resPrimary.focus();
   }
-  els.retry.addEventListener("click", function () { startRound(missed.slice()); });
-  els.restart.addEventListener("click", function () { startRound(words); });
+
+  function finishRound() {
+    var left = pack.filter(function (w) { return w.st !== "know"; });
+    var good = pack.length - left.length;
+    if (left.length) {
+      showResults("Круг " + round + " пройден",
+        good + "<small> / " + pack.length + " знаю</small>",
+        "Слова «Средне» и «Не знаю» повторяются, пока не напишешь каждое с первого раза без ошибок.",
+        "Повторить " + left.length + " " + plural(left.length, "слово", "слова", "слов"),
+        function () { startRound(left); });
+    } else if (unknownWords().length) {
+      showResults("Пакет выучен", pack.length + "<small> / " + pack.length + " знаю</small>",
+        "Эти слова больше не попадутся. Осталось выучить: " + unknownWords().length + ".",
+        "Следующий пакет", startPack);
+    } else {
+      showAllLearned();
+    }
+  }
+
+  function showAllLearned() {
+    showResults("Список пройден", words.length + "<small> / " + words.length + " знаю</small>",
+      "Все слова из списка выучены. Можно начать заново или добавить новые слова во вкладке «Мои слова».",
+      "Начать заново", function () { known = {}; saveKnown(); startPack(); });
+  }
+
+  function plural(n, one, few, many) {
+    var m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+  }
+
+  els.resPrimary.addEventListener("click", function () { if (resAction) resAction(); });
+
+  // Two clicks to reset, since the page cannot show a confirm dialog.
+  var resetArmed = null;
+  els.reset.addEventListener("click", function () {
+    if (!resetArmed) {
+      els.reset.textContent = "Точно сбросить?";
+      resetArmed = setTimeout(function () { resetArmed = null; els.reset.textContent = "Сбросить прогресс"; }, 3000);
+      return;
+    }
+    clearTimeout(resetArmed); resetArmed = null;
+    els.reset.textContent = "Сбросить прогресс";
+    known = {}; saveKnown();
+    startPack();
+    els.status.className = "status ok";
+    els.status.textContent = "Прогресс сброшен: все слова снова в изучении.";
+  });
 
   // ----- word list -----
   function updateCount() {
@@ -584,7 +786,7 @@
   }
   els.input.addEventListener("input", updateCount);
   els.saveBtn.addEventListener("click", function () {
-    if (applyText(els.input.value, true)) { startRound(words); show("train"); }
+    if (applyText(els.input.value, true)) { startPack(); show("train"); }
   });
   els.sample.addEventListener("click", function () { els.input.value = SAMPLE; updateCount(); els.status.textContent = ""; });
   els.file.addEventListener("change", function () {
@@ -605,7 +807,8 @@
   els.input.value = stored && parse(stored).pairs.length ? stored : SAMPLE;
   updateCount();
   applyText(els.input.value, false);
-  startRound(words);
+  syncSizes();
+  startPack();
 })();
 </script>
 </body>
